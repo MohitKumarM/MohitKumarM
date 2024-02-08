@@ -253,104 +253,19 @@ codeunit 50000 "Auth 2.0"
             JHeaderObject.Add('portCode', JGlobalNull);
     end;
 
-    // Codeunit18543 Start
-    [EventSubscriber(ObjectType::Codeunit, 18543, 'OnAfterValidatePurchaseLineFields', '', false, false)]
-    procedure OnAfterValidatePurchaseLineFields(var PurchaseLine: Record "Purchase Line")
+    procedure IffcoMCAuth()
     var
-        Purchaseheader: Record "Purchase Header";
-        DateFilterCalc: Codeunit "DateFilter-Calc";
-        AccountingPeriodFilter: Text[30];
-        AccountingPeriodFilter2: Text[30];
-        PurchInvAmt_TDS: Decimal;
-        PurchCrMemoAmt_TDS: Decimal;
-        NewTDSBaseAmount: Decimal;
-        TaxTransactionValue: Record "Tax Transaction Value";
-        TDSSetup: Record "TDS Setup";
-        LineC: Integer;
-        Team002: Label 'Previous Purchase amount of PAN %1 is %2.';
-        LineAmount: Decimal;
-        RecPurchaseLine: Record "Purchase Line";
-        PreviousTDSAmount: Decimal;
+        AuthJson: JsonObject;
+        AuthJson2: JsonObject;
+        Body: Text;
     begin
-        if Purchaseheader.get(PurchaseLine."Document Type", PurchaseLine."Document No.") then;
-        if (Purchaseheader."Document Type" = Purchaseheader."Document Type"::Order) or (Purchaseheader."Document Type" = Purchaseheader."Document Type"::Invoice) then begin
-            if (PurchaseLine."TDS Section Code" = '194C') and (PurchaseLine."GST Group Type" = PurchaseLine."GST Group Type"::Goods) then begin
-                DateFilterCalc.CreateAccountingPeriodFilter(AccountingPeriodFilter, AccountingPeriodFilter2, Purchaseheader."Posting Date", 0);
-                CalculatePANWisePurchase(PurchaseLine, AccountingPeriodFilter, PurchaseLine."P.A.N. No.", PurchInvAmt_TDS, PurchCrMemoAmt_TDS);//TradingTDSCalc
-                PreviousTDSAmount := PurchInvAmt_TDS - PurchCrMemoAmt_TDS;
-                LineAmount := 0;
-                RecPurchaseLine.Reset();
-                RecPurchaseLine.SetRange("Document No.", PurchaseLine."Document No.");
-                if RecPurchaseLine.FindSet() then
-                    repeat
-                        LineAmount += RecPurchaseLine."Line Amount";
-                    until RecPurchaseLine.next = 0;
-                PreviousTDSAmount += LineAmount;
-                LineC += 1;
-                IF LineC = 1 THEN
-                    MESSAGE(Team002, PurchaseLine."P.A.N. No.", PreviousTDSAmount);
-                if PreviousTDSAmount > 5000000 then
-                    NewTDSBaseAmount := abs(5000000 - PurchaseLine."Line Amount")
-                else
-                    NewTDSBaseAmount := PurchaseLine."Line Amount";
+        AuthJson.Add('username', 'mastersindia');
+        AuthJson.Add('password', '123');
+        AuthJson2.Add('DOCNO', 'SPL083394');
+        AuthJson.Add('TPAPIDOCDTLS', AuthJson2);
 
-                TDSSetup.Get();
-                if PurchaseLine.Type <> PurchaseLine.Type::" " then begin
-                    TaxTransactionValue.Reset();
-                    TaxTransactionValue.SetRange("Tax Record ID", PurchaseLine.RecordId);
-                    TaxTransactionValue.SetRange("Document Type Filter", PurchaseLine."Document Type"::Invoice);
-                    TaxTransactionValue.SetRange("Document No. Filter", PurchaseLine."Document No.");
-                    TaxTransactionValue.SetRange("Line No. Filter", PurchaseLine."Line No.");
-                    TaxTransactionValue.SetRange("Tax Type", TDSSetup."Tax Type");
-                    TaxTransactionValue.SetRange("Value Type", TaxTransactionValue."Value Type"::COMPONENT);
-                    TaxTransactionValue.SetFilter(Percent, '<>%1', 0);
-                    if TaxTransactionValue.FindFirst() then begin
-                        TaxTransactionValue.Amount := (NewTDSBaseAmount * TaxTransactionValue.Percent) / 100;
-                        TaxTransactionValue.Modify();
-                    end;
-                end;
-                if PurchaseLine.Type <> PurchaseLine.Type::" " then begin
-                    TaxTransactionValue.Reset();
-                    TaxTransactionValue.SetRange("Tax Record ID", PurchaseLine.RecordId);
-                    TaxTransactionValue.SetRange("Document Type Filter", PurchaseLine."Document Type"::Invoice);
-                    TaxTransactionValue.SetRange("Document No. Filter", PurchaseLine."Document No.");
-                    TaxTransactionValue.SetRange("Line No. Filter", PurchaseLine."Line No.");
-                    TaxTransactionValue.SetRange("Tax Type", TDSSetup."Tax Type");
-                    TaxTransactionValue.SetRange("Value Type", TaxTransactionValue."Value Type"::COMPONENT);
-                    TaxTransactionValue.SetRange("Value ID", 8);
-                    if TaxTransactionValue.FindFirst() then begin
-                        TaxTransactionValue.Amount := NewTDSBaseAmount;
-
-                        TaxTransactionValue.Modify();
-                    end;
-                end;
-                Message(Format(NewTDSBaseAmount));
-
-            end;
-        end;
+        AuthJson.WriteTo(Body);
+        Message(Body);
     end;
-
-    procedure CalculatePANWisePurchase(PurchaseLine: Record "Purchase Line"; AccPeriodFilter: Text[30]; Pay2VendPAN: Code[20]; var PrevPurchInvoiceAmount: Decimal; var PrevPurchCreditMemoAmount: Decimal)
-    var
-        PurchInvLineR: Record "Purch. Inv. Line";
-        PurchCrMemoLineR: Record "Purch. Cr. Memo Line";
-    begin
-        //TradingTDSCalc
-        PurchInvLineR.RESET;
-        PurchInvLineR.SETCURRENTKEY("Posting Date", "P.A.N. No.", Type);
-        PurchInvLineR.SetRange("Posting Date", 20230401D, 20240331D);
-        PurchInvLineR.SETFILTER("P.A.N. No.", Pay2VendPAN);
-        PurchInvLineR.SETFILTER(Type, '%1|%2', PurchInvLineR.Type::Item, PurchInvLineR.Type::"Charge (Item)");
-        PurchInvLineR.CALCSUMS("Line Amount", "Line Discount Amount");
-        PrevPurchInvoiceAmount := ABS(PurchInvLineR."Line Amount") - ABS(PurchInvLineR."Line Discount Amount");
-        PurchCrMemoLineR.RESET;
-        PurchCrMemoLineR.SETCURRENTKEY("Posting Date", "P.A.N. No.", Type);
-        PurchCrMemoLineR.SETFILTER("Posting Date", AccPeriodFilter);
-        PurchCrMemoLineR.SETFILTER("P.A.N. No.", Pay2VendPAN);
-        PurchCrMemoLineR.SETFILTER(Type, '%1|%2', PurchCrMemoLineR.Type::Item, PurchCrMemoLineR.Type::"Charge (Item)");
-        PurchCrMemoLineR.CALCSUMS("Line Amount", "Line Discount Amount");
-        PrevPurchCreditMemoAmount := ABS(PurchCrMemoLineR."Line Amount") - ABS(PurchCrMemoLineR."Line Discount Amount");
-    end;
-    // Codeunit18543 Start
 
 }

@@ -1,8 +1,8 @@
-// tableextension 50056 State extends State
+// tableextension 50057 UnitOfMeasure extends "Unit of Measure"
 // {
 //     fields
 //     {
-//         field(50050; "State Code for E-Invoicing"; Code[2])
+//         field(50100; "UOM For E Invoicing"; Code[10])
 //         {
 //             DataClassification = ToBeClassified;
 //         }
